@@ -1,0 +1,45 @@
+== Retrieve
+
+Homepage::  retrieve.rubyforge.org[http://retrieve.rubyforge.org/]
+Author::    Bob Aman  (mailto:bob@sporkmonger.com)
+Copyright:: Copyright © 2008 Bob Aman
+License::   MIT
+
+== Description
+
+Retrieve is an extensible library for retrieving resources identified by a
+URI. Retrieval methods are registered to URI schemes.
+
+== Features
+
+* Access any resource with a client defined for its scheme.
+* Read and write to anything that can be addressed by a URI.
+* Easily implement additional clients for other URI schemes.
+* Supports "http" and "file" schemes by default.
+* The HTTP client is faster and more efficient than Net::HTTP.
+
+== Example Usage
+
+  res = Retrieve.open("file:///home/sporkmonger/todo.txt", :mode => :read)
+  #=> #<Retrieve::Resource:0x847c2c URI:file:///home/sporkmonger/todo.txt>
+  res.read
+  #=> "TODO: Write some code."
+  res.close
+
+  body, status = nil
+  Retrieve.open("http://www.google.com/", :method => :get) do |resource|
+    body = resource.read
+    status = resource.metadata[:status]
+  end
+  body
+  #=> GOOGLE_HOMEPAGE_HTML
+  status
+  #=> 200
+
+== Requirements
+
+* addressable
+
+== Install
+
+* sudo gem install retrieve
