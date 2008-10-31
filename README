@@ -26,15 +26,18 @@ URI. Retrieval methods are registered to URI schemes.
   #=> "TODO: Write some code."
   res.close
 
-  body, status = nil
+  status, headers, body = nil
   Retrieve.open("http://www.google.com/", :method => :get) do |resource|
     body = resource.read
     status = resource.metadata[:status]
+    headers = resource.metadata[:headers]
   end
-  body
-  #=> GOOGLE_HOMEPAGE_HTML
   status
   #=> 200
+  headers
+  #=> {"Content-Type" => "text/html; charset=ISO-8859-1", ...}
+  body
+  #=> GOOGLE_HOMEPAGE_HTML
 
 == Requirements
 
