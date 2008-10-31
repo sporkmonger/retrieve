@@ -37,7 +37,7 @@ URI. Retrieval methods are registered to URI schemes.
   headers
   #=> {"Content-Type" => "text/html; charset=ISO-8859-1", ...}
   body
-  #=> GOOGLE_HOMEPAGE_HTML
+  #=> "<html><head><meta http-equiv= ..."
 
 == Requirements
 
