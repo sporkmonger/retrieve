@@ -31,3 +31,9 @@ module Retrieve
     return Retrieve::Resource.new(uri).open(options, &block)
   end
 end
+
+if ([:bytesize, "bytesize"] & String.instance_methods).empty?
+  class String # :nodoc:
+    alias_method :bytesize, :size
+  end
+end

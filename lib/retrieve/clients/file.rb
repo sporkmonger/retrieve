@@ -100,27 +100,39 @@ module Retrieve
     ##
     # Reads the entire contents of the <tt>Resource</tt>.
     #
+    # @param [Integer, NilClass] The number of bytes to read, or nil for all.
+    #
     # @return [String] The contents of the file.
-    def read
-      if @file == nil
-        raise IOError, "Closed stream."
-      end
+    def read(n=nil)
+      raise IOError, "Missing stream." if @file == nil
       process_metadata
-      return @file.read
+      return @file.read(n)
+    end
+
+
+    ##
+    # Writes a <tt>String</tt> to the file.
+    #
+    # @param [String] The <tt>String</tt> to write.
+    #
+    # @return [Integer] The number of bytes written.
+    def write(contents)
+      raise IOError, "Missing stream." if @file == nil
+      return @file.write(contents)
     end
 
     ##
     # Closes the <tt>Resource</tt>.
     def close
-      if @file == nil
-        raise IOError, "Closed stream."
-      end
+      raise IOError, "Missing stream." if @file == nil
       @file.close
       @file = nil
       return nil
     end
 
   private
+    ##
+    # Loads the file metadata into the <tt>Resource</tt> object.
     def process_metadata
       if self.resource.metadata.empty?
         file_stat = @file.stat

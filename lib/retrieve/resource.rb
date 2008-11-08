@@ -23,7 +23,6 @@
 
 require "addressable/uri"
 require "retrieve"
-require "retrieve/response"
 
 module Retrieve
   class Resource
@@ -71,7 +70,7 @@ module Retrieve
     # @yieldparam [Retrieve::Resource] resource
     #   The <tt>Retrieve::Resource</tt> after it has been opened.
     # @return [Retrieve::Resource, NilClass]
-    #   If the optional block is supplied, the method will return nil.
+    #   If the optional block is supplied, returns the block's return value.
     #   Otherwise, the opened <tt>Retrieve::Resource</tt> object is returned.
     def open(options={}, &block)
       begin
@@ -80,25 +79,13 @@ module Retrieve
         if block
           # If we were supplied a block, yield to it, then close.
           yield self
-          nil
         else
           self
         end
       ensure
         # Make sure we close if there's a block.
-        self.close if block
+        self.close if block rescue nil
       end
-    end
-
-    ##
-    # Syntactic sugar, primarily for use with HTTP.
-    # For example, <tt>Retrieve::Resource.response.status</tt> is a synonym
-    # for <tt>Retrieve::Resource.metadata[:status]</tt>.
-    #
-    # @return [Retrieve::Response]
-    #   Returns the complete response given by the server.
-    def response
-      return Retrieve::Response.new(@metadata)
     end
 
     ##

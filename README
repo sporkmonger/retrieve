@@ -30,10 +30,13 @@ URI. Retrieval methods are registered to URI schemes.
   Retrieve.open("http://www.google.com/", :method => :get) do |resource|
     body = resource.read
     status = resource.metadata[:status]
+    reason = resource.metadata[:reason]
     headers = resource.metadata[:headers]
   end
   status
-  #=> 200
+  #=> "200" # NOTE: This is a String
+  reason
+  #=> "OK"
   headers
   #=> {"Content-Type" => "text/html; charset=ISO-8859-1", ...}
   body
