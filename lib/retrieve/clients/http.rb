@@ -71,7 +71,8 @@ module Retrieve
     def open(options={})
       options = {
         :method => :get,
-        :cookie_store => {}
+        :cookie_store => {},
+        :redirect => true
       }.merge(options)
       @cookie_store = options[:cookie_store]
       @response = send_request(options[:method], options)
@@ -97,7 +98,7 @@ module Retrieve
       if @response == nil
         raise IOError, "No stream to close."
       end
-      @response.close
+      @socket.close if @socket
       @response = nil
       return nil
     end
@@ -117,8 +118,16 @@ module Retrieve
     # @return [Retrieve::HTTPClient::HTTPResponse] The server's response.
     def send_request(method, options={})
       begin
-        host, port = self.resource.uri.host, self.resource.uri.inferred_port
-        @socket = PushBackIO.new(TCPSocket.new(host, port), options)
+        # if self.resource.uri.host == @host &&
+        #     self.resource.uri.inferred_port == @port &&
+        #     @socket != nil && !@socket.secondary.closed?
+        #   @host, @port =
+        #     self.resource.uri.host, self.resource.uri.inferred_port
+        #   @socket = PushBackIO.new(TCPSocket.new(@host, @port), options)
+        # end
+        @host, @port =
+          self.resource.uri.host, self.resource.uri.inferred_port
+        @socket = PushBackIO.new(TCPSocket.new(@host, @port), options)
 
         output = StringIO.new
         write_head(method, output, options)
@@ -224,6 +233,9 @@ module Retrieve
         ready =
           @socket.buffer.size > 0 ||
           !!select([@socket.secondary], nil, nil, (options[:timeout] || 20))
+        if !ready
+          raise HTTPClientError, "Timeout waiting for the server to respond."
+        end
       end
       until read_status_line
       end
@@ -232,17 +244,16 @@ module Retrieve
       process_metadata
       until read_body
       end
-
+      if @response.status =~ /^3[0-9][0-9]$/
+        handle_redirect
+      end
       return @response
     end
 
     def read_status_line
-      data = @socket.read(1024, partial=true)
+      data = @socket.read(1024)
       match = data.match(HTTP_START_LINE)
-      if !match && data !~ /\r\n/
-        @socket.push(data)
-        return false
-      elsif !match
+      if !match
         raise HTTPParserError, "Response missing HTTP start line."
       elsif match.begin(0) != 0
         raise HTTPParserError, "Found HTTP start line on the wrong line."
@@ -256,11 +267,10 @@ module Retrieve
 
     def read_headers
       read_bytes = @socket.buffer.size > 0 ? @socket.buffer.size : CHUNK_SIZE
-      data = @socket.read(read_bytes, partial=true)
+      data = @socket.read(read_bytes)
       match = data.match(HTTP_HEADER)
       if !match && data !~ /\r\n/
-        @socket.push(data)
-        return false
+        @socket.push(data); return false
       elsif !match
         data = data[2..-1] if (data =~ /^\r\n/) == 0
         @socket.push(data)
@@ -280,21 +290,26 @@ module Retrieve
       body = StringIO.new
       if @response.headers["Transfer-Encoding"] =~ /chunked/i
         loop do
-          data = @socket.read(CHUNK_SIZE, partial=true)
+          data = @socket.read(CHUNK_SIZE)
           match = data.match(HTTP_CHUNK_SIZE)
           if match == nil
             raise HTTPParserError, "Could not determine chunk size."
           end
           chunk_size = match.captures[0].to_i(16)
+          remainder = chunk_size
           @socket.push(match.post_match)
-          chunk = @socket.read(chunk_size, partial=true)
-          crlf = @socket.read(2, partial=true)
+          chunk = StringIO.new
+          until chunk.size == chunk_size
+            chunk << @socket.read(remainder)
+            remainder = chunk_size - chunk.size
+          end
+          body << chunk.string
+          crlf = @socket.read(2)
           if crlf != "\r\n"
             raise HTTPParserError,
               "Expected CRLF after chunk (size: #{chunk_size}), " +
-              "got: #{crlf.inspect}"
+              "got: #{crlf.inspect}, Preceeded by:\n#{body.string.inspect}"
           end
-          body << chunk
           break if chunk_size == 0
         end
       else
@@ -303,7 +318,7 @@ module Retrieve
           remainder = content_length
           loop do
             read_bytes = remainder > CHUNK_SIZE ? CHUNK_SIZE : remainder
-            data = @socket.read(read_bytes, partial=true)
+            data = @socket.read(read_bytes)
             remainder -= data.bytesize
             body << data
             break if remainder == 0
@@ -313,13 +328,13 @@ module Retrieve
           # likely to read too far, and get stuck waiting for an EOFError.
           data = nil
           if @socket.buffer.size > 0
-            data = @socket.read(@socket.buffer.size, partial=true)
+            data = @socket.read(@socket.buffer.size)
             body << data
           end
           begin
             loop do
               break if data == ""
-              data = @socket.read(CHUNK_SIZE, partial=true)
+              data = @socket.read(CHUNK_SIZE)
               body << data
             end
           rescue HTTPClientError
@@ -332,12 +347,35 @@ module Retrieve
     end
 
     ##
+    # Handles the redirection.
+    def handle_redirect
+      location = @response.headers["Location"]
+      redirect = false
+      if options[:redirect] == true
+        redirect = true
+      elsif options[:redirect].kind_of?(Proc)
+        redirect = options[:redirect].call(@response)
+      end
+      if redirect
+        case @response.status
+        when "300"
+          # Multiple choices, MUST use Proc
+        when "301"
+          # Permanent redirect
+        when "302", "307"
+          # Temporary redirect
+        when "303"
+          # Switch to GET, if we not already
+        when "305"
+          # Needs to be accessed via proxy
+        end
+      end
+    end
+
+    ##
     # Loads the HTTP request metadata into the <tt>Resource</tt> object.
     def process_metadata
-      if !@response
-        raise HTTPClientError, "No response object, cannot process metadata."
-      end
-      if self.resource.metadata.empty?
+      if @response && self.resource.metadata.empty?
         self.resource.metadata[:http_version] = @response.http_version
         self.resource.metadata[:status] = @response.status
         self.resource.metadata[:reason] = @response.reason
@@ -417,7 +455,7 @@ module Retrieve
       #
       # @param [IO, StringIO] secondary
       #   The secondary <tt>IO</tt> object to wrap.
-      def initialize(secondary, options)
+      def initialize(secondary, options={})
         if !secondary.kind_of?(IO) && !secondary.kind_of?(StringIO)
           raise TypeError, "Expected IO or StringIO, got #{secondary.class}."
         end
@@ -459,32 +497,24 @@ module Retrieve
       # needed from the secondary <tt>IO</tt> to complete the request.
       #
       # @param [Integer] n The number of bytes to read.
-      # @param [TrueClass, FalseClass] partial
-      #   If partial is true then readpartial is used instead.
       # @return [String]
       #   The return value is guaranteed to be a <tt>String</tt>, and never
       #   <tt>nil</tt>.  If it returns a string of length 0 then there is
       #   nothing to read from the buffer (most likely because it's closed).
       #   It will also avoid reading from a secondary that's closed.
-      def read(n, partial=false)
+      def read(n)
         r = pop(n)
         needs = n - r.length
 
         if needs > 0 && !@secondary.closed?
           sec = ""
 
-          if partial
-            begin
-              protect do
-                sec = @secondary.readpartial(needs)
-              end
-            rescue EOFError
-              close
-            end
-          else
+          begin
             protect do
-              sec = @secondary.read(needs)
+              sec = @secondary.readpartial(needs)
             end
+          rescue EOFError
+            close
           end
 
           r << (sec || "")
