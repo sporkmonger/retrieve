@@ -23,6 +23,7 @@
 
 require "addressable/uri"
 require "retrieve"
+require "retrieve/client"
 
 module Retrieve
   class Resource
@@ -95,7 +96,18 @@ module Retrieve
     def open(options={}, &block)
       begin
         # Call the appropriate client's open method.
-        self.client.open(options)
+        if self.client
+          self.client.open(options)
+        else
+          if self.uri
+            raise Retrieve::NoClientError,
+              "No client was registered to handle the " +
+              "'#{self.uri.scheme}' scheme."
+          else
+            raise Retrieve::NoClientError,
+              "Cannot find a client without a URI scheme."
+          end
+        end
         if block
           # If we were supplied a block, yield to it, then close.
           yield self

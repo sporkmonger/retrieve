@@ -24,6 +24,9 @@
 require "retrieve"
 
 module Retrieve
+  class NoClientError < StandardError
+  end
+
   ##
   # A client which handles a given URI scheme.
   #
