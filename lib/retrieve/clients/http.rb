@@ -75,7 +75,9 @@ module Retrieve
         :redirect => true
       }.merge(options)
       @cookie_store = options[:cookie_store]
+      @redirects ||= []
       @response = send_request(options[:method], options)
+      @remaining_body.reopen
       @remaining_body << @response.body
       @remaining_body.rewind
       return self.resource
@@ -118,6 +120,9 @@ module Retrieve
     # @return [Retrieve::HTTPClient::HTTPResponse] The server's response.
     def send_request(method, options={})
       begin
+        # We need to persist the method.
+        @method = method
+
         # if self.resource.uri.host == @host &&
         #     self.resource.uri.inferred_port == @port &&
         #     @socket != nil && !@socket.secondary.closed?
@@ -244,8 +249,11 @@ module Retrieve
       process_metadata
       until read_body
       end
-      if @response.status =~ /^3[0-9][0-9]$/
-        handle_redirect
+      case @response.status
+      when /^2[0-9][0-9]$/
+        update_permanent_uri
+      when /^3[0-9][0-9]$/
+        handle_redirect(options)
       end
       return @response
     end
@@ -348,7 +356,7 @@ module Retrieve
 
     ##
     # Handles the redirection.
-    def handle_redirect
+    def handle_redirect(options={})
       location = @response.headers["Location"]
       redirect = false
       if options[:redirect] == true
@@ -356,26 +364,46 @@ module Retrieve
       elsif options[:redirect].kind_of?(Proc)
         redirect = options[:redirect].call(@response)
       end
+      @redirects << [self.resource.uri, @response]
       if redirect
         case @response.status
         when "300"
-          # Multiple choices, MUST use Proc
+          # Multiple choices, do nothing
         when "301"
           # Permanent redirect
+          self.resource.uri =
+            Addressable::URI.parse(@response.headers["Location"])
+          send_request(@method, options)
         when "302", "307"
           # Temporary redirect
+          self.resource.uri =
+            Addressable::URI.parse(@response.headers["Location"])
+          send_request(@method, options)
         when "303"
-          # Switch to GET, if we not already
+          # Switch to GET, if we're not already using GET
+          self.resource.uri =
+            Addressable::URI.parse(@response.headers["Location"])
+          send_request(:get, options)
         when "305"
-          # Needs to be accessed via proxy
+          # Needs to be accessed via proxy, do nothing
         end
+      end
+    end
+
+    ##
+    # Update the resource's permanent URI.
+    def update_permanent_uri
+      for uri, response in @redirects
+        break if response.status != "301"
+        self.resource.permanent_uri =
+          Addressable::URI.parse(response.headers["Location"])
       end
     end
 
     ##
     # Loads the HTTP request metadata into the <tt>Resource</tt> object.
     def process_metadata
-      if @response && self.resource.metadata.empty?
+      if @response
         self.resource.metadata[:http_version] = @response.http_version
         self.resource.metadata[:status] = @response.status
         self.resource.metadata[:reason] = @response.reason
