@@ -39,15 +39,24 @@ module Retrieve
         end
       end
       @uri = uri
+      @permanent_uri = uri
       @metadata = {}
       @client = nil
     end
 
     ##
-    # The URI for this resource.
+    # The URI for this resource.  This will be set to the final resource URI
+    # after all redirections required by the protocol.
     #
     # @return [Addressable::URI] The URI.
-    attr_reader :uri
+    attr_accessor :uri
+
+    ##
+    # The permanent URI for this resource.  This will be the permanent URI
+    # that should be used for subsequent requests for the same resource.
+    #
+    # @return [Addressable::URI] The URI.
+    attr_accessor :permanent_uri
 
     ##
     # The metadata for this resource.
@@ -60,7 +69,11 @@ module Retrieve
     #
     # @return [Retrieve::Client] The client.
     def client
-      @client ||= Retrieve::Client.for(@uri.scheme).new(self)
+      if @uri.scheme
+        @client ||= Retrieve::Client.for(@uri.scheme).new(self)
+      else
+        nil
+      end
     end
 
     ##
