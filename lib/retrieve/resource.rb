@@ -69,11 +69,18 @@ module Retrieve
     #
     # @return [Retrieve::Client] The client.
     def client
-      if @uri.scheme
-        @client ||= Retrieve::Client.for(@uri.scheme).new(self)
-      else
-        nil
-      end
+      @client ||= (begin
+        if @uri.scheme
+          client_class = Retrieve::Client.for(@uri.scheme)
+          if client_class
+            client_class.new(self)
+          else
+            nil
+          end
+        else
+          nil
+        end
+      end)
     end
 
     ##
