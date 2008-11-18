@@ -291,7 +291,8 @@ module Retrieve
           crlf = @socket.read(2, partial=true)
           if crlf != "\r\n"
             raise HTTPParserError,
-              "Expected CRLF after chunk, got: #{crlf.inspect}"
+              "Expected CRLF after chunk (size: #{chunk_size}), " +
+              "got: #{crlf.inspect}"
           end
           body << chunk
           break if chunk_size == 0
