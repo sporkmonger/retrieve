@@ -298,7 +298,7 @@ module Retrieve
       body = StringIO.new
       if @response.headers["Transfer-Encoding"] =~ /chunked/i
         loop do
-          data = @socket.read(CHUNK_SIZE)
+          data = @socket.read(1024)
           match = data.match(HTTP_CHUNK_SIZE)
           if match == nil
             raise HTTPParserError, "Could not determine chunk size."
