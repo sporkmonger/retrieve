@@ -48,6 +48,7 @@ namespace :metrics do
       puts "#{result.real} seconds."
 
       puts "Running #{iterations} iterations with Apache Bench..."
+      puts "(AB cheats and uses a persistent connection.)"
       result = Benchmark.measure do
         `ab -n #{iterations} \"#{uri}\" 2>&1`
       end
@@ -55,10 +56,11 @@ namespace :metrics do
 
       puts "Running #{iterations} iterations with RFuzz..."
       result = Benchmark.measure do
+        parsed_uri = Addressable::URI.parse(uri)
+        host, port = parsed_uri.host, parsed_uri.inferred_port
         iterations.times do
-          parsed_uri = Addressable::URI.parse(uri)
-          host, port = parsed_uri.host, parsed_uri.inferred_port
-          RFuzz::HttpClient.new(host, port).get(parsed_uri.omit(
+          client = RFuzz::HttpClient.new(host, port)
+          client.get(parsed_uri.omit(
             :scheme, :authority, :fragment
           ).to_s)
         end

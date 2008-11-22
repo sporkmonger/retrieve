@@ -105,7 +105,7 @@ module Retrieve
           "Expected redirect to be either true, false, or Proc, " +
           "got #{options[:redirect].class}."
       end
-      @connections = {}
+      @connections = options[:connections] || {}
       @cookie_store = options[:cookie_store]
       @redirects ||= []
       @response = send_request(options[:method], options)
@@ -163,6 +163,14 @@ module Retrieve
               "* Using open connection to #{@host} port #{@port}\n")
           end
           @socket = @connections[[@host, @port]]
+          if @socket.closed?
+            if options[:log]
+              options[:log].write(
+                "* Socket was closed.  Reopening.\n")
+            end
+            @socket = PushBackIO.new(TCPSocket.new(@host, @port), options)
+            @connections[[@host, @port]] = @socket
+          end
         else
           if options[:log]
             options[:log].write(
@@ -191,13 +199,22 @@ module Retrieve
       rescue Object
         raise $!
       ensure
-        for pair, connection in @connections
+        if !options[:connections]
+          for pair, connection in @connections
+            if options[:log]
+              options[:log].write(
+                "* Closing connection to #{pair[0]} port #{pair[1]}\n")
+            end
+            connection.close if connection
+            @connections.delete(pair)
+          end
+        else
           if options[:log]
             options[:log].write(
-              "* Closing connection to #{pair[0]} port #{pair[1]}\n")
+              "* No connections closed.  " +
+              "Connections must be closed manually.\n"
+            )
           end
-          connection.close if connection
-          @connections.delete(pair)
         end
       end
     end
@@ -219,6 +236,9 @@ module Retrieve
       # We always need these headers.
       headers["Host"] = self.resource.uri.normalized_authority
       headers["Content-Length"] = options[:body] ? options[:body].bytesize : 0
+      if options[:connections]
+        headers["Connection"] = "Keep-Alive"
+      end
 
       # Merge cookies with headers.
       if headers["Cookie"].kind_of?(String)
@@ -319,6 +339,10 @@ module Retrieve
         update_permanent_uri(options)
       when /^3[0-9][0-9]$/
         handle_redirect(options)
+      end
+      if @response.headers["Connection"] == "close"
+        @socket.close rescue nil
+        @connections.delete([@host, @port])
       end
       return @response
     end
@@ -699,6 +723,15 @@ module Retrieve
       # @param [String] content The <tt>String</tt> to write.
       def write(content)
         protect { @secondary.write(content) }
+      end
+
+      ##
+      # Checks if the <tt>IO</tt> object is closed.
+      #
+      # @returns [TrueClass, FalseClass]
+      #   Checks if the wrapped <tt>IO</tt> object is closed or not.
+      def closed?
+        @secondary.closed?
       end
 
       ##
