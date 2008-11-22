@@ -259,12 +259,12 @@ module Retrieve
     end
 
     def read_status_line
-      data = @socket.read(1024)
+      data = @socket.readline
       match = data.match(HTTP_START_LINE)
       if !match
         raise HTTPParserError, "Response missing HTTP start line."
       elsif match.begin(0) != 0
-        raise HTTPParserError, "Found HTTP start line on the wrong line."
+        raise HTTPParserError, "Found corrupted HTTP start line."
       else
         @socket.push(match.post_match)
         @response.http_version, @response.status, @response.reason =
@@ -298,7 +298,7 @@ module Retrieve
       body = StringIO.new
       if @response.headers["Transfer-Encoding"] =~ /chunked/i
         loop do
-          data = @socket.read(1024)
+          data = @socket.readline
           match = data.match(HTTP_CHUNK_SIZE)
           if match == nil
             raise HTTPParserError, "Could not determine chunk size."
@@ -518,6 +518,46 @@ module Retrieve
       # Resets the internal buffer.
       def reset
         @buffer.string = @buffer.read; nil
+      end
+
+      ##
+      # First does a read from the internal buffer, and then appends anything
+      # needed from the secondary <tt>IO</tt> to complete the request.
+      #
+      # @return [String]
+      #   The return value is guaranteed to be a <tt>String</tt>, and never
+      #   <tt>nil</tt>.  If it returns a string of length 0 then there is
+      #   nothing to read from the buffer (most likely because it's closed).
+      #   It will also avoid reading from a secondary that's closed.
+      def readline
+        @buffer.rewind
+        r = if @buffer.size > 0
+          @buffer.readline
+        else
+          ""
+        end
+
+        if r[-1..-1] != "\n"
+          sec = ""
+
+          begin
+            protect do
+              sec = @secondary.readline
+            end
+          rescue EOFError
+            close
+          end
+
+          r << (sec || "")
+
+          # Finally, if there's nothing at all returned then this is bad.
+          if r.length == 0
+            raise HTTPClientError, "Server returned empty response."
+          end
+        end
+
+        reset
+        return r
       end
 
       ##
