@@ -66,6 +66,19 @@ module Retrieve
     #
     # @option [Symbol] method
     #   The HTTP method to use for the request.
+    # @option [Hash] cookie_store
+    #   The cookie store for the request.
+    # @option [TrueClass, FalseClass, Proc] redirect
+    #   Set this option to <tt>true</tt> to follow redirects, <tt>false</tt>
+    #   to return immediately after the request is complete.  Set to a
+    #   <tt>Proc</tt> to conditionally follow redirects.  The <tt>Proc</tt>
+    #   will be passed the response returned by the server, and should return
+    #   <tt>true</tt> or <tt>false</tt>.  A return value of <tt>true</tt>
+    #   will request the resource the client was redirected to.  A return
+    #   value of <tt>false</tt> will halt and immediately return the current
+    #   response.
+    # @option [#write] log
+    #   The IO object to write the log to.  If nil, no logging will be done.
     #
     # @return [Retrieve::Resource] The client's resource.
     def open(options={})
@@ -75,6 +88,23 @@ module Retrieve
         :redirect => true,
         :log => nil
       }.merge(options)
+      if !options[:method].kind_of?(String) &&
+          !options[:method].kind_of?(Symbol)
+        raise TypeError,
+          "Expected method to be Symbol or String, " +
+          "got #{options[:method].class}."
+      end
+      if options[:log] && !options[:log].respond_to?(:write)
+        raise TypeError,
+          "Expected log to respond to #write message, " +
+          "got #{options[:log].class}."
+      end
+      if options[:redirect] != true && options[:redirect] != false &&
+          options[:redirect].kind_of?(Proc)
+        raise TypeError,
+          "Expected redirect to be either true, false, or Proc, " +
+          "got #{options[:redirect].class}."
+      end
       @connections = {}
       @cookie_store = options[:cookie_store]
       @redirects ||= []
@@ -278,7 +308,11 @@ module Retrieve
       until read_body(options)
       end
       if options[:log]
-        options[:log].write("* Response body omitted from log.\n")
+        if @response.body == ""
+          options[:log].write("* No response body.\n")
+        else
+          options[:log].write("* Response body omitted from log.\n")
+        end
       end
       case @response.status
       when /^2[0-9][0-9]$/
