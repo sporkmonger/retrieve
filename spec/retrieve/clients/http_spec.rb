@@ -146,7 +146,7 @@ Content-Length: 17\r
 Example response.\r
 \r
 RESPONSE
-      puts Retrieve.open("http://example.com/").read
+      puts Retrieve.open("http://example.com/", :log => STDOUT).read
     end).should raise_error(Retrieve::HTTPClient::HTTPParserError)
   end
 

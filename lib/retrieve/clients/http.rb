@@ -327,9 +327,15 @@ module Retrieve
       data = @socket.readline
       match = data.match(HTTP_START_LINE)
       if !match
+        if options[:log]
+          options[:log].write("* Response missing HTTP start line.\n")
+        end
         raise HTTPParserError, "Response missing HTTP start line."
       elsif match.begin(0) != 0
-        raise HTTPParserError, "Found corrupted HTTP start line."
+        if options[:log]
+          options[:log].write("* HTTP start line was invalid.\n")
+        end
+        raise HTTPParserError, "HTTP start line was invalid."
       else
         if options[:log]
           options[:log].write(match.to_s.gsub(/^/, "< "))
@@ -348,11 +354,17 @@ module Retrieve
         @socket.push(data); return false
       elsif !match
         # Finished reading headers.
-        data = data[2..-1] if (data =~ /^\r\n/) == 0
-        @socket.push(data)
-        return true
-      elsif match.begin(0) != 0
-        raise HTTPParserError, "Found HTTP header in the wrong place."
+        if (data =~ /^\r\n/) == 0
+          data = data[2..-1]
+          @socket.push(data)
+          return true
+        else
+          if options[:log]
+            options[:log].write("* Invalid header value.\n")
+          end
+          raise HTTPParserError,
+            "Expected HTTP header, got something else: #{data.inspect}"
+        end
       else
         if options[:log]
           options[:log].write(match.to_s.gsub(/^/, "< "))
@@ -372,6 +384,9 @@ module Retrieve
           data = @socket.readline
           match = data.match(HTTP_CHUNK_SIZE)
           if match == nil
+            if options[:log]
+              options[:log].write("* No chunk size sent by server.\n")
+            end
             raise HTTPParserError, "Could not determine chunk size."
           end
           chunk_size = match.captures[0].to_i(16)
@@ -385,6 +400,9 @@ module Retrieve
           body << chunk.string
           crlf = @socket.read(2)
           if crlf != "\r\n"
+            if options[:log]
+              options[:log].write("* Missing CRLF after chunk.\n")
+            end
             raise HTTPParserError,
               "Expected CRLF after chunk (size: #{chunk_size}), " +
               "got: #{crlf.inspect}, Preceeded by:\n#{body.string.inspect}"
