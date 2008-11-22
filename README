@@ -20,11 +20,15 @@ URI. Retrieval methods are registered to URI schemes.
 
 == Example Usage
 
+  require "retrieve/clients/file"
+
   res = Retrieve.open("file:///home/sporkmonger/todo.txt", :mode => :read)
   #=> #<Retrieve::Resource:0x847c2c URI:file:///home/sporkmonger/todo.txt>
   res.read
   #=> "TODO: Write some code."
   res.close
+
+  require "retrieve/clients/http"
 
   status, headers, body = nil
   Retrieve.open("http://www.google.com/", :method => :get) do |resource|
@@ -39,8 +43,20 @@ URI. Retrieval methods are registered to URI schemes.
   #=> "OK"
   headers
   #=> {"Content-Type" => "text/html; charset=ISO-8859-1", ...}
-  body
-  #=> "<html><head><meta http-equiv= ..."
+  body[0..50] + " ..."
+  #=> "<html><head><meta http-equiv=\"content-type\" content ..."
+
+  connections = {}
+  status, headers, body = nil
+  Retrieve.open(
+    "http://google.com/",
+    :redirect => true,
+    :connections => connections
+  ) do |resource|
+    body = resource.read
+  end
+  body[0..50] + " ..."
+  #=> "<html><head><meta http-equiv=\"content-type\" content ..."
 
 == Requirements
 
