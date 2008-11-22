@@ -72,8 +72,10 @@ module Retrieve
       options = {
         :method => :get,
         :cookie_store => {},
-        :redirect => true
+        :redirect => true,
+        :log => nil
       }.merge(options)
+      @connections = {}
       @cookie_store = options[:cookie_store]
       @redirects ||= []
       @response = send_request(options[:method], options)
@@ -123,20 +125,34 @@ module Retrieve
         # We need to persist the method.
         @method = method
 
-        # if self.resource.uri.host == @host &&
-        #     self.resource.uri.inferred_port == @port &&
-        #     @socket != nil && !@socket.secondary.closed?
-        #   @host, @port =
-        #     self.resource.uri.host, self.resource.uri.inferred_port
-        #   @socket = PushBackIO.new(TCPSocket.new(@host, @port), options)
-        # end
         @host, @port =
           self.resource.uri.host, self.resource.uri.inferred_port
-        @socket = PushBackIO.new(TCPSocket.new(@host, @port), options)
+        if @connections[[@host, @port]]
+          if options[:log]
+            options[:log].write(
+              "* Using open connection to #{@host} port #{@port}\n")
+          end
+          @socket = @connections[[@host, @port]]
+        else
+          if options[:log]
+            options[:log].write(
+              "* About to connect to #{@host} port #{@port}\n")
+          end
+          @socket = PushBackIO.new(TCPSocket.new(@host, @port), options)
+          @connections[[@host, @port]] = @socket
+          if options[:log]
+            options[:log].write(
+              "* Connected to #{@host} port #{@port}\n")
+          end
+        end
 
         output = StringIO.new
         write_head(method, output, options)
         body = options[:body] || ""
+
+        if options[:log]
+          options[:log].write((output.string + body).gsub(/^/, "> "))
+        end
 
         @socket.write(output.string + body)
         @socket.flush
@@ -145,7 +161,14 @@ module Retrieve
       rescue Object
         raise $!
       ensure
-        @socket.close if @socket
+        for pair, connection in @connections
+          if options[:log]
+            options[:log].write(
+              "* Closing connection to #{pair[0]} port #{pair[1]}\n")
+          end
+          connection.close if connection
+          @connections.delete(pair)
+        end
       end
     end
 
@@ -158,7 +181,10 @@ module Retrieve
     # @option cookies The HTTP cookies to write.
     # @option body The HTTP body that will be used in the request.
     def write_head(method, output, options={})
-      headers = options[:headers] || {}
+      headers = {
+        "User-Agent" =>
+          "retrieve/#{Retrieve::VERSION::STRING} (#{RUBY_PLATFORM})"
+      }.merge(options[:headers] || {})
 
       # We always need these headers.
       headers["Host"] = self.resource.uri.normalized_authority
@@ -171,6 +197,7 @@ module Retrieve
         headers["Cookie"] ||= []
       end
       for key, value in (options[:cookies] || {})
+        next if value == nil
         if value.kind_of?(Array)
           value.each do |subvalue|
             headers["Cookie"] << "#{escape(key)}=#{escape(subvalue)}"
@@ -200,6 +227,7 @@ module Retrieve
     def encode_headers(headers)
       result = StringIO.new
       headers.each do |key, value|
+        next if value == nil
         if value.kind_of?(Array)
           value.each do |subvalue|
             result << ("%s: %s\r\n" % [key, subvalue])
@@ -242,23 +270,26 @@ module Retrieve
           raise HTTPClientError, "Timeout waiting for the server to respond."
         end
       end
-      until read_status_line
+      until read_status_line(options)
       end
-      until read_headers
+      until read_headers(options)
       end
       process_metadata
-      until read_body
+      until read_body(options)
+      end
+      if options[:log]
+        options[:log].write("* Response body omitted from log.\n")
       end
       case @response.status
       when /^2[0-9][0-9]$/
-        update_permanent_uri
+        update_permanent_uri(options)
       when /^3[0-9][0-9]$/
         handle_redirect(options)
       end
       return @response
     end
 
-    def read_status_line
+    def read_status_line(options={})
       data = @socket.readline
       match = data.match(HTTP_START_LINE)
       if !match
@@ -266,6 +297,9 @@ module Retrieve
       elsif match.begin(0) != 0
         raise HTTPParserError, "Found corrupted HTTP start line."
       else
+        if options[:log]
+          options[:log].write(match.to_s.gsub(/^/, "< "))
+        end
         @socket.push(match.post_match)
         @response.http_version, @response.status, @response.reason =
           match.captures
@@ -273,19 +307,22 @@ module Retrieve
       end
     end
 
-    def read_headers
-      read_bytes = @socket.buffer.size > 0 ? @socket.buffer.size : CHUNK_SIZE
-      data = @socket.read(read_bytes)
+    def read_headers(options={})
+      data = @socket.readline
       match = data.match(HTTP_HEADER)
       if !match && data !~ /\r\n/
         @socket.push(data); return false
       elsif !match
+        # Finished reading headers.
         data = data[2..-1] if (data =~ /^\r\n/) == 0
         @socket.push(data)
         return true
       elsif match.begin(0) != 0
         raise HTTPParserError, "Found HTTP header in the wrong place."
       else
+        if options[:log]
+          options[:log].write(match.to_s.gsub(/^/, "< "))
+        end
         # TODO: deal with LWS header continuations and comments
         @socket.push(match.post_match)
         key, value = match.captures
@@ -294,7 +331,7 @@ module Retrieve
       end
     end
 
-    def read_body
+    def read_body(options={})
       body = StringIO.new
       if @response.headers["Transfer-Encoding"] =~ /chunked/i
         loop do
@@ -392,7 +429,7 @@ module Retrieve
 
     ##
     # Update the resource's permanent URI.
-    def update_permanent_uri
+    def update_permanent_uri(options={})
       for uri, response in @redirects
         break if response.status != "301"
         self.resource.permanent_uri =
