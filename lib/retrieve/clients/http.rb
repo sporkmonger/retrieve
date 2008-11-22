@@ -360,6 +360,7 @@ module Retrieve
           return true
         else
           if options[:log]
+            options[:log].write(data.gsub(/^/, "< "))
             options[:log].write("* Invalid header value.\n")
           end
           raise HTTPParserError,
