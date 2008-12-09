@@ -528,22 +528,39 @@ module Retrieve
     ##
     # This Hash subclass stores keys in a case-insensitive manner.
     class CaseInsensitiveHash < Hash
+      ##
+      # @see Hash#[]
       def [](key)
         return super(key.downcase)
       end
 
+      ##
+      # @see Hash#[]=
       def []=(key, value)
         @key_labels ||= {}
         @key_labels[key.downcase] = key
         return super(key.downcase, value)
       end
+
+      ##
+      # @see Hash#store
       alias_method :store, :[]=
 
+      ##
+      # Returns the labels for the keys, exactly as they were originally
+      # entered.
+      #
+      # @return [Array] The key labels.
       def key_labels
         @key_labels ||= {}
         self.keys.map { |key| @key_labels[key] }
       end
 
+      ##
+      # Converts to a normal Hash object.  The key labels are used as the
+      # Hash keys.
+      #
+      # @return [Hash] The converted Hash.
       def to_hash
         # Iterate over key labels, and look up the value, stuffing everything
         # into a new Hash as we go.
@@ -553,10 +570,14 @@ module Retrieve
         end
       end
 
+      ##
+      # @see Hash#to_s
       def to_s
         return self.to_hash.to_s
       end
 
+      ##
+      # @see Hash#inspect
       def inspect
         return self.to_hash.inspect
       end
