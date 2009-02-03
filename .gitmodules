@@ -1,0 +1,3 @@
+[submodule "vendor/hashbag"]
+	path = vendor/hashbag
+	url = git://github.com/sporkmonger/hashbag.git

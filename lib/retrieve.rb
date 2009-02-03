@@ -26,6 +26,10 @@ require "retrieve/client"
 require "retrieve/resource"
 require "addressable/uri"
 
+vendor_path = File.expand_path(File.join(File.dirname(__FILE__), "../vendor"))
+$: << File.join(vendor_path, "hashbag/lib")
+$:.uniq!
+
 module Retrieve
   def self.open(uri, options={}, &block)
     return Retrieve::Resource.new(uri).open(options, &block)
