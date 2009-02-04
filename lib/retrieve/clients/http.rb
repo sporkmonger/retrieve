@@ -479,7 +479,27 @@ module Retrieve
           end
         end
       end
-      @response.body = body.string
+      if @response.headers["Transfer-Encoding"] =~ /^(x-)?gzip$/ ||
+          (options[:decompress] &&
+          @response.headers["Content-Encoding"] =~ /^(x-)?gzip$/)
+        if options[:log]
+          options[:log].write("* Decompressing gzip stream.\n")
+        end
+        require "zlib"
+        body.rewind
+        content_reader = Zlib::GzipReader.new(body)
+        @response.body = content_reader.read
+      elsif @response.headers["Transfer-Encoding"] =~ /^deflate$/ ||
+          (options[:decompress] &&
+          @response.headers["Content-Encoding"] =~ /^deflate$/)
+        if options[:log]
+          options[:log].write("* Inflating stream.\n")
+        end
+        require "zlib"
+        @response.body = Zlib::Inflate.inflate(body.string)
+      else
+        @response.body = body.string
+      end
     end
 
     ##
