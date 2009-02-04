@@ -438,6 +438,7 @@ module Retrieve
     end
 
     def read_body(options={})
+      return "" if @method == :head
       body = StringIO.new
       if @response.headers["Transfer-Encoding"] =~ /chunked/i
         loop do
@@ -526,6 +527,7 @@ module Retrieve
     ##
     # Handles the redirection.
     def handle_redirect(options={})
+      return if @method == :head
       location = @response.headers["Location"]
       redirect = false
       if options[:redirect] == true
