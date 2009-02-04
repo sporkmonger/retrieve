@@ -108,6 +108,17 @@ module Retrieve
           "got #{options[:redirect].class}."
       end
       @connections = options[:connections] || {}
+      if options[:connections]
+        # We've been passed a connections hash, so keep the connections
+        # alive.
+        headers = (options[:headers] || {})
+        if !headers["Connection"]
+          headers["Connection"] = "keep-alive"
+          if !headers["Keep-Alive"]
+            headers["Keep-Alive"] = "300"
+          end
+        end
+      end
       @cookie_store = options[:cookie_store]
       @redirects ||= []
       @response = send_request(options[:method], options)
