@@ -24,6 +24,7 @@
 require "retrieve"
 require "retrieve/client"
 require "socket"
+require "stringio"
 require "hashbag/case_insensitive_hash"
 
 module Retrieve
