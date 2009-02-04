@@ -60,6 +60,55 @@ URI. Retrieval methods are registered to URI schemes.
   body[0..50] + " ..."
   #=> "<html><head><meta http-equiv=\"content-type\" content ..."
 
+  # Advanced example using ranges
+
+  connections = {}
+  uri = "http://www.example.com/"
+  File.open("example.html", "w") do |file|
+    file.write(File.open("http.log", "a") do |log|
+      accept_ranges = nil
+      content_length = nil
+      bytes_received = 0
+      Retrieve.open(
+        uri, :method => :head, :connections => connections, :log => log
+      ) do |r|
+        accept_ranges = r.metadata[:headers]["Accept-Ranges"]
+        content_length = r.metadata[:headers]["Content-Length"]
+      end
+      buffer = StringIO.new
+      if accept_ranges == "bytes"
+        log.write("* Server claims to support partial content.\n")
+        while content_length.to_i > bytes_received
+          if (131072 + bytes_received) > content_length.to_i
+            range = bytes_received..-1
+          else
+            range = bytes_received..131072 + bytes_received
+          end
+          Retrieve.open(
+            uri, :connections => connections, :range => range, :log => log
+          ) do |r|
+            buffer.write(r.read)
+            bytes_received += r.metadata[:headers]["Content-Length"].to_i
+            if r.metadata[:status] == "200"
+              log.write("* Server did not return partial content.\n")
+            end
+          end
+        end
+      else
+        log.write("* Server does NOT claim to support partial content.\n")
+        Retrieve.open(uri, :connections => connections, :log => log) do |r|
+          buffer.write(r.read)
+        end
+      end
+      for pair, connection in connections
+        log.write("* Closing connection to #{pair[0]} port #{pair[1]}\n")
+        connection.close if connection
+        connections.delete(pair)
+      end
+      buffer.string
+    end)
+  end
+
 == Requirements
 
 * addressable
