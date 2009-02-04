@@ -231,7 +231,8 @@ module Retrieve
     def write_head(method, output, options={})
       headers = {
         "User-Agent" =>
-          "retrieve/#{Retrieve::VERSION::STRING} (#{RUBY_PLATFORM})"
+          "retrieve/#{Retrieve::VERSION::STRING} (#{RUBY_PLATFORM})",
+        "Accept" => "*/*"
       }.merge(options[:headers] || {})
 
       # We always need these headers.
@@ -260,7 +261,7 @@ module Retrieve
 
       # Write to the socket.
       output.write("%s %s HTTP/1.1\r\n" % [
-        method.to_s.upcase, self.resource.uri.omit(
+        method.to_s.upcase, self.resource.uri.normalize.omit(
           :scheme, :authority, :fragment
         )
       ])
@@ -486,18 +487,21 @@ module Retrieve
           # Multiple choices, do nothing
         when "301"
           # Permanent redirect
-          self.resource.uri =
+          self.resource.uri.join!(
             Addressable::URI.parse(@response.headers["Location"])
+          )
           send_request(@method, options)
         when "302", "307"
           # Temporary redirect
-          self.resource.uri =
+          self.resource.uri.join!(
             Addressable::URI.parse(@response.headers["Location"])
+          )
           send_request(@method, options)
         when "303"
           # Switch to GET, if we're not already using GET
-          self.resource.uri =
+          self.resource.uri.join!(
             Addressable::URI.parse(@response.headers["Location"])
+          )
           send_request(:get, options)
         when "305"
           # Needs to be accessed via proxy, do nothing
