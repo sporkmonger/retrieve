@@ -265,6 +265,9 @@ module Retrieve
       end
 
       if options[:range]
+        if !options[:range].kind_of?(Range)
+          raise TypeError, "Expected Range, got #{options[:range].class}."
+        end
         if options[:range].last < -1 ||
             (options[:range].exclude_end? && options[:range].last <= -1)
           raise ArgumentError, "Invalid Range: #{options[:range].inspect}"
