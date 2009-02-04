@@ -108,17 +108,6 @@ module Retrieve
           "got #{options[:redirect].class}."
       end
       @connections = options[:connections] || {}
-      if options[:connections]
-        # We've been passed a connections hash, so keep the connections
-        # alive.
-        headers = (options[:headers] || {})
-        if !headers["Connection"]
-          headers["Connection"] = "keep-alive"
-          if !headers["Keep-Alive"]
-            headers["Keep-Alive"] = "300"
-          end
-        end
-      end
       @cookie_store = options[:cookie_store]
       @redirects ||= []
       @response = send_request(options[:method], options)
@@ -249,9 +238,25 @@ module Retrieve
 
       # We always need these headers.
       headers["Host"] = self.resource.uri.normalized_authority
-      headers["Content-Length"] = options[:body] ? options[:body].bytesize : 0
-      if options[:connections]
+      if options[:body]
+        headers["Content-Length"] = options[:body].bytesize
+      end
+
+      if options[:connections] && !headers["Connection"]
+        # We've been passed a connections hash, so keep the connections
+        # alive.
         headers["Connection"] = "Keep-Alive"
+      end
+
+      if options[:range]
+        if options[:range].last < -1 ||
+            (options[:range].exclude_end? && options[:range].last <= -1)
+          raise ArgumentError, "Invalid Range: #{options[:range].inspect}"
+        end
+        first = options[:range].first
+        last = options[:range].last
+        last -= 1 if options[:range].exclude_end?
+        headers["Range"] = "#{first}-#{last == -1 ? "" : last}"
       end
 
       # Merge cookies with headers.
