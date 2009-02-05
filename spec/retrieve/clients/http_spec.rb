@@ -400,6 +400,93 @@ RESPONSE
       resource.read.should == "Example response."
     end
   end
+
+  it "should send out proper range headers with the :range option" do
+    content = <<-CONTENT
+Hello, this is going to send back partial content.
+CONTENT
+    replay do |request|
+      request.should include("GET / HTTP/1.1\r\n")
+      request.should include("Host: example.com\r\n")
+      request.should include("Range: 24-42\r\n")
+    end
+    response(<<-RESPONSE)
+HTTP/1.1 206 Partial Content\r
+Content-Length: 19\r
+\r
+#{content[24..42]}\r
+\r
+RESPONSE
+    Retrieve.open("http://example.com/", :range => 24..42) do |resource|
+      resource.read.should == "send back partial c"
+      resource.metadata[:status].should == "206"
+    end
+  end
+
+  it "should send out proper range headers with the :range option" do
+    content = <<-CONTENT
+Hello, this is going to send back partial content.
+CONTENT
+    replay do |request|
+      request.should include("GET / HTTP/1.1\r\n")
+      request.should include("Host: example.com\r\n")
+      request.should include("Range: 24-41\r\n")
+    end
+    response(<<-RESPONSE)
+HTTP/1.1 206 Partial Content\r
+Content-Length: 18\r
+\r
+#{content[24...42]}\r
+\r
+RESPONSE
+    Retrieve.open("http://example.com/", :range => 24...42) do |resource|
+      resource.read.should == "send back partial "
+      resource.metadata[:status].should == "206"
+    end
+  end
+
+  it "should send out proper range headers with the :range option" do
+    content = <<-CONTENT
+Hello, this is going to send back partial content.
+CONTENT
+    replay do |request|
+      request.should include("GET / HTTP/1.1\r\n")
+      request.should include("Host: example.com\r\n")
+      request.should include("Range: 24-\r\n")
+    end
+    response(<<-RESPONSE)
+HTTP/1.1 206 Partial Content\r
+Content-Length: 27\r
+\r
+#{content[24..-1]}\r
+\r
+RESPONSE
+    Retrieve.open("http://example.com/", :range => 24..-1) do |resource|
+      resource.read.should == "send back partial content.\n"
+      resource.metadata[:status].should == "206"
+    end
+  end
+
+  it "should raise an error if the :range option is given an invalid value" do
+    (lambda do
+      Retrieve.open("http://example.com/", :range => 24...-1) do |resource|
+      end
+    end).should raise_error(ArgumentError)
+  end
+
+  it "should raise an error if the :range option is given an invalid value" do
+    (lambda do
+      Retrieve.open("http://example.com/", :range => 24..-2) do |resource|
+      end
+    end).should raise_error(ArgumentError)
+  end
+
+  it "should raise an error if the :range option is given an invalid type" do
+    (lambda do
+      Retrieve.open("http://example.com/", :range => :bogus) do |resource|
+      end
+    end).should raise_error(TypeError)
+  end
 end
 
 describe Retrieve::HTTPClient, "with real responses" do
