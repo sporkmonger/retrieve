@@ -110,6 +110,7 @@ module Retrieve
       @connections = options[:connections] || {}
       @cookie_store = options[:cookie_store]
       @redirects ||= []
+      @normalized_uri = self.resource.uri.normalize
       @response = send_request(options[:method], options)
       @remaining_body.reopen
       @remaining_body << @response.body
@@ -158,7 +159,7 @@ module Retrieve
         @method = method
 
         @host, @port =
-          self.resource.uri.host, self.resource.uri.inferred_port
+          @normalized_uri.host, @normalized_uri.inferred_port
         if @connections[[@host, @port]]
           if options[:log]
             options[:log].write(
@@ -237,7 +238,7 @@ module Retrieve
       }.merge(options[:headers] || {})
 
       # We always need these headers.
-      headers["Host"] = self.resource.uri.normalized_authority
+      headers["Host"] = @normalized_uri.authority
       if options[:body]
         headers["Content-Length"] = options[:body].bytesize
       end
@@ -281,7 +282,7 @@ module Retrieve
 
       # Write to the socket.
       output.write("%s %s HTTP/1.1\r\n" % [
-        method.to_s.upcase, self.resource.uri.normalize.omit(
+        method.to_s.upcase, @normalized_uri.omit(
           :scheme, :authority, :fragment
         )
       ])
