@@ -134,23 +134,7 @@ module Retrieve
       if @response == nil
         raise IOError, "No stream to close."
       end
-      if @socket
-        if @socket.closed?
-          if options[:log]
-            options[:log].write(
-              "* Connection to #{@socket.host} port #{@socket.port} " +
-              "was already closed.\n"
-            )
-          end
-        else
-          if options[:log]
-            options[:log].write(
-              "* Closing connection to #{@socket.host} port #{@socket.port}\n"
-            )
-          end
-          @socket.close
-        end
-      end
+      @socket.close if @socket && !@socket.closed?
       @response = nil
       return nil
     end

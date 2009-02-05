@@ -153,7 +153,6 @@ RESPONSE
   it "should handle a normal response" do
     replay do |request|
       request.should include("GET / HTTP/1.1\r\n")
-      request.should include("Content-Length: 0\r\n")
       request.should include("Host: example.com\r\n")
     end
     response(<<-RESPONSE)
@@ -175,7 +174,6 @@ RESPONSE
   it "should handle a response missing Content-Length" do
     replay do |request|
       request.should include("GET / HTTP/1.1\r\n")
-      request.should include("Content-Length: 0\r\n")
       request.should include("Host: example.com\r\n")
     end
     response(<<-RESPONSE)
@@ -192,7 +190,6 @@ RESPONSE
   it "should handle a response with a lot of headers" do
     replay do |request|
       request.should include("GET / HTTP/1.1\r\n")
-      request.should include("Content-Length: 0\r\n")
       request.should include("Host: example.com\r\n")
     end
     response(<<-RESPONSE)
@@ -227,7 +224,6 @@ RESPONSE
   it "should headers to be accessed in a case-insensitive fashion" do
     replay do |request|
       request.should include("GET / HTTP/1.1\r\n")
-      request.should include("Content-Length: 0\r\n")
       request.should include("Host: example.com\r\n")
     end
     response(<<-RESPONSE)
@@ -262,7 +258,6 @@ RESPONSE
   it "should not explode if there are no headers" do
     replay do |request|
       request.should include("GET / HTTP/1.1\r\n")
-      request.should include("Content-Length: 0\r\n")
       request.should include("Host: example.com\r\n")
     end
     response("HTTP/1.1 200 OK\r\n\r\n")
@@ -274,7 +269,6 @@ RESPONSE
   it "should handle a Transfer-Encoding of 'chunked' properly" do
     replay do |request|
       request.should include("GET / HTTP/1.1\r\n")
-      request.should include("Content-Length: 0\r\n")
       request.should include("Host: example.com\r\n")
     end
     response(<<-RESPONSE)
@@ -296,7 +290,6 @@ RESPONSE
   it "should raise an error for bogus chunking" do
     replay do |request|
       request.should include("GET / HTTP/1.1\r\n")
-      request.should include("Content-Length: 0\r\n")
       request.should include("Host: example.com\r\n")
     end
     response(<<-RESPONSE)
@@ -314,7 +307,6 @@ RESPONSE
   it "should raise an error for bogus chunking" do
     replay do |request|
       request.should include("GET / HTTP/1.1\r\n")
-      request.should include("Content-Length: 0\r\n")
       request.should include("Host: example.com\r\n")
     end
     response(<<-RESPONSE)
@@ -334,7 +326,6 @@ RESPONSE
   it "should send out proper cookie headers with the :cookies option" do
     replay do |request|
       request.should include("GET / HTTP/1.1\r\n")
-      request.should include("Content-Length: 0\r\n")
       request.should include("Host: example.com\r\n")
       request.should include("Cookie: foo=bar\r\n")
     end
@@ -355,7 +346,6 @@ RESPONSE
   it "should send out proper cookie headers with the :cookies option" do
     replay do |request|
       request.should include("GET / HTTP/1.1\r\n")
-      request.should include("Content-Length: 0\r\n")
       request.should include("Host: example.com\r\n")
       request.should include("Cookie: one=two\r\n")
       request.should include("Cookie: foo=bar\r\n")
@@ -378,7 +368,6 @@ RESPONSE
   it "should send out proper cookie headers with the :cookies option" do
     replay do |request|
       request.should include("GET / HTTP/1.1\r\n")
-      request.should include("Content-Length: 0\r\n")
       request.should include("Host: example.com\r\n")
       request.should include("Cookie: a=b\r\n")
       request.should include("Cookie: one=two\r\n")
